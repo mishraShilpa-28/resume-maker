@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resume Maker</title>
+<!--
+  Resume Maker: works offline. Double-click this file to open it in Chrome or Edge.
+  Paste the resume the AI chat wrote (the "Resume Markdown" block), then press
+  "Save as PDF" or "Download Word". Nothing is uploaded anywhere.
+-->
+<style>
+:root {
+  --bg: #f4f4f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #66665f; --line: #deded8;
+  --accent: #1f3a5f; --ok: #1b7a3d; --warn: #9a6200; --bad: #b3261e; --field: #fbfbf9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecece8; --muted: #a3a39b; --line: #34342f;
+    --accent: #8fb4e3; --ok: #6fcf8f; --warn: #e6b450; --bad: #ff8a80; --field: #191917;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --panel: #1f1f1d; --ink: #ecece8; --muted: #a3a39b; --line: #34342f;
+  --accent: #8fb4e3; --ok: #6fcf8f; --warn: #e6b450; --bad: #ff8a80; --field: #191917;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px;
+  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header.bar h1 { font-size: 17px; margin: 0 12px 0 0; }
+.spacer { flex: 1; }
+button, .btn { font: inherit; border: 1px solid var(--line); background: var(--field); color: var(--ink);
+  border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); font-weight: 600; }
+button:hover { filter: brightness(1.05); }
+label.inline { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field); color: var(--ink); }
+input[type=text] { width: 260px; max-width: 100%; }
+main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.15fr); gap: 16px; padding: 16px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.panel h2 { font-size: 15px; margin: 0 0 8px; }
+.hint { color: var(--muted); font-size: 13.5px; margin: 0 0 8px; }
+textarea { width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical; }
+#src { min-height: 460px; }
+details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+#checks ul { margin: 6px 0 0; padding-left: 18px; }
+#checks li { margin: 3px 0; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.status { font-weight: 600; margin-bottom: 6px; }
+.kw { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-radius: 999px; font-size: 13px;
+  border: 1px solid var(--line); }
+.kw.hit { color: var(--ok); } .kw.miss { color: var(--bad); }
+.previewWrap { overflow: hidden; background: #8a8a85; border-radius: 8px; padding: 14px; }
+.scaler { transform-origin: top left; }
+
+/* ---------- the resume page itself (always black on white) ---------- */
+.page { width: 210mm; min-height: 297mm; background: #fff; color: #111; padding: 12mm 14mm;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25); position: relative;
+  font-family: Calibri, Carlito, Arial, Helvetica, sans-serif; font-size: var(--fs, 10.5pt); line-height: 1.24;
+  font-variant-ligatures: none; font-feature-settings: "liga" 0, "clig" 0; hyphens: manual; }
+.page a { color: inherit; text-decoration: none; }
+.page .name { font-size: 2em; font-weight: 700; text-align: center; color: #1f3a5f; margin: 0; line-height: 1.1; }
+.page .hline { text-align: center; margin: 2pt 0 0; }
+.page .hline.first { font-weight: 600; }
+.page h2 { font-size: 1.08em; text-transform: uppercase; letter-spacing: .06em; color: #1f3a5f; margin: 8pt 0 3pt;
+  padding-bottom: 1.5pt; border-bottom: 0.8pt solid #1f3a5f; break-after: avoid; }
+.page .entry { display: flex; gap: 10pt; justify-content: space-between; margin: 4pt 0 1pt; break-after: avoid; }
+.page .entry .l { min-width: 0; }
+.page .entry .r { white-space: nowrap; text-align: right; }
+.page .entry .sub { display: none; }
+.page .entry.two { flex-wrap: wrap; row-gap: 0; }
+.page .entry.two .mid { display: none; }
+.page .entry.two .sub { display: block; flex-basis: 100%; font-style: italic; }
+.page ul { margin: 1pt 0 2pt; padding-left: 13pt; }
+.page li { margin: 0.8pt 0; }
+.page p { margin: 1.5pt 0; }
+.page .ruler { position: absolute; left: 0; right: 0; border-top: 1px dashed #d33; pointer-events: none; }
+.page .ruler span { position: absolute; right: 4px; top: -15px; font: 11px system-ui, sans-serif; color: #d33; }
+
+@media print {
+  @page { size: A4; margin: 0; }
+  html, body { background: #fff !important; }
+  header.bar, .editor, .noprint, .ruler { display: none !important; }
+  main { display: block; padding: 0; }
+  .panel.previewPanel { border: 0; padding: 0; background: none; }
+  .previewWrap { padding: 0; background: none; overflow: visible; }
+  .scaler { transform: none !important; height: auto !important; }
+  .page { box-shadow: none; min-height: 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Resume Maker</h1>
+  <label class="inline">File name <input type="text" id="fname" placeholder="Name_JobTitle_Company"></label>
+  <label class="inline">Text size
+    <select id="fs"><option value="11">11 pt</option><option value="10.5" selected>10.5 pt</option><option value="10">10 pt (smallest)</option></select>
+  </label>
+  <span class="spacer"></span>
+  <button id="example">Load example</button>
+  <button id="copytxt">Copy plain text</button>
+  <button id="docx">Download Word (.docx)</button>
+  <button id="pdf" class="primary">Save as PDF</button>
+</header>
+
+<main>
+  <section class="panel editor">
+    <h2>1. Paste the resume the AI wrote</h2>
+    <p class="hint">Paste the whole <b>Resume Markdown</b> block. You can also edit it here: the preview updates as you type.</p>
+    <textarea id="src" spellcheck="true" placeholder="# Your Name&#10;Job Title&#10;City, Country | +91-00000-00000 | you@email.com | linkedin.com/in/you&#10;&#10;## Summary&#10;...&#10;&#10;## Skills&#10;**Languages:** ...&#10;&#10;## Experience&#10;### Job Title | Company | City | Mon YYYY – Present&#10;- Bullet"></textarea>
+
+    <details open id="checks">
+      <summary>2. Checks before you send it</summary>
+      <div id="checkOut"></div>
+    </details>
+
+    <details>
+      <summary>Fact check numbers against the master CV (optional)</summary>
+      <p class="hint">Paste <code>MASTER_CV.md</code> here. Any number in the resume that is not in the master CV is flagged, because free AI chats sometimes invent numbers.</p>
+      <textarea id="master" rows="6" placeholder="Paste MASTER_CV.md here"></textarea>
+    </details>
+
+    <details>
+      <summary>How to save the PDF</summary>
+      <p class="hint">Press <b>Save as PDF</b>. In the print window choose <b>Destination: Save as PDF</b>, <b>Paper: A4</b>,
+      <b>Margins: Default</b>, <b>Scale: 100</b>, and turn <b>Headers and footers</b> off. The file name above is filled in for you.
+      The PDF has real, selectable text, so applicant tracking systems can read every word.</p>
+      <p class="hint">Use <b>Word (.docx)</b> when a job portal or agency asks for Word, or for old portals (Taleo, some government and PSU sites).
+      Otherwise send the PDF.</p>
+    </details>
+  </section>
+
+  <section class="panel previewPanel">
+    <div class="noprint status" id="fit"></div>
+    <div class="previewWrap" id="wrap">
+      <div class="scaler" id="scaler"><div class="page" id="page"></div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const src = $("src"), page = $("page"), scaler = $("scaler"), wrap = $("wrap");
+  const STORE = "resume-maker-draft-v1";
+  const MM = 96 / 25.4;
+
+  const EXAMPLE = [
+    "<!-- keywords: React.js, JavaScript, REST APIs, Git, Agile -->",
+    "# Asha Verma",
+    "Software Developer",
+    "Pune, India | +91-90000-00000 | asha.verma@example.com | linkedin.com/in/ashaverma | github.com/ashaverma",
+    "",
+    "## Summary",
+    "Software developer with 1 year of experience building React.js web apps and REST APIs. B.Tech in Computer Science (CGPA 8.1/10). Available to join immediately.",
+    "",
+    "## Skills",
+    "**Frontend:** React.js, JavaScript (ES6+), HTML5, CSS3, Tailwind CSS",
+    "**Backend & tools:** Node.js, Express, REST APIs, MongoDB, Git, GitHub, Agile",
+    "",
+    "## Experience",
+    "### Software Developer Intern | Example Tech Pvt Ltd | Pune, India | Jan 2025 – Jun 2025",
+    "- Built 12 React.js screens for a customer dashboard, connected to REST APIs with Axios.",
+    "- Fixed 40 bugs reported by QA and wrote unit tests with Jest.",
+    "",
+    "## Projects",
+    "### Expense Tracker | React.js, Node.js, MongoDB | github.com/ashaverma/expense-tracker",
+    "- Full-stack app with login, monthly charts and CSV export.",
+    "",
+    "## Education",
+    "### B.Tech, Computer Science and Engineering | Example Institute of Technology | 2020 – 2024",
+    "CGPA 8.1/10",
+    "",
+    "## Certifications",
+    "- Responsive Web Design – freeCodeCamp (Mar 2024)"
+  ].join("\n");
+
+  // ------------------------------------------------------------ parsing
+  function parse(text) {
+    const doc = { name: "", header: [], sections: [], keywords: [] };
+    let sec = null;
+    for (const raw of text.replace(/\r/g, "").split("\n")) {
+      const line = raw.trim();
+      const kw = line.match(/^<!--\s*keywords?\s*:(.*?)-->$/i);
+      if (kw) { doc.keywords = kw[1].split(",").map((s) => s.trim()).filter(Boolean); continue; }
+      if (!line || line.startsWith("<!--") || line.startsWith("```") || /^-{3,}$/.test(line)) continue;
+      if (/^#\s+/.test(line) && !doc.name) { doc.name = line.replace(/^#\s+/, ""); continue; }
+      if (/^##\s+/.test(line)) { sec = { title: line.replace(/^##\s+/, ""), items: [] }; doc.sections.push(sec); continue; }
+      if (!sec) { doc.header.push(line); continue; }
+      if (/^###\s+/.test(line)) { sec.items.push({ type: "entry", parts: line.replace(/^###\s+/, "").split(/\s+\|\s+/) }); continue; }
+      if (/^[-*•]\s+/.test(line)) { sec.items.push({ type: "bullet", text: line.replace(/^[-*•]\s+/, "") }); continue; }
+      sec.items.push({ type: "para", text: line });
+    }
+    return doc;
+  }
+
+  // Inline text -> segments {t, b, i, href}
+  const LINK_RE = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|(https?:\/\/[^\s|,;)]+)|\b((?:[a-z0-9-]+\.)+(?:com|in|io|dev|app|org|net|me|co|ai)\/[^\s|,;)]*)|\b([a-z0-9-]+\.(?:github\.io|vercel\.app|netlify\.app|pages\.dev))\b/gi;
+  function autolink(t, b, i, out) {
+    let last = 0, m;
+    LINK_RE.lastIndex = 0;
+    while ((m = LINK_RE.exec(t))) {
+      let s = m[0].replace(/[.]+$/, "");
+      if (m.index > last) out.push({ t: t.slice(last, m.index), b, i });
+      const href = m[1] ? "mailto:" + s : /^https?:/i.test(s) ? s : "https://" + s;
+      out.push({ t: s, b, i, href });
+      last = m.index + s.length;
+      LINK_RE.lastIndex = last;
+    }
+    if (last < t.length) out.push({ t: t.slice(last), b, i });
+  }
+  function inline(text) {
+    const out = [];
+    const re = /\*\*(.+?)\*\*|\*(.+?)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) autolink(text.slice(last, m.index), false, false, out);
+      if (m[1] !== undefined) autolink(m[1], true, false, out);
+      else if (m[2] !== undefined) autolink(m[2], false, true, out);
+      else out.push({ t: m[3], href: /^(https?:|mailto:)/i.test(m[4]) ? m[4] : "https://" + m[4] });
+      last = re.lastIndex;
+    }
+    if (last < text.length) autolink(text.slice(last), false, false, out);
+    return out;
+  }
+  const plain = (text) => inline(text).map((s) => s.t).join("");
+
+  // ------------------------------------------------------------ HTML preview
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  function segHTML(segs) {
+    return segs.map((s) => {
+      let h = esc(s.t);
+      if (s.b) h = "<b>" + h + "</b>";
+      if (s.i) h = "<i>" + h + "</i>";
+      if (s.href) h = '<a href="' + esc(s.href) + '">' + h + "</a>";
+      return h;
+    }).join("");
+  }
+  function entryHTML(parts) {
+    const p = parts.slice();
+    const right = p.length > 1 ? p.pop() : "";
+    const title = p.shift() || "";
+    const midHTML = segHTML(inline(p.join(" | ")));
+    const mid = p.length ? '<span class="mid"> | <i>' + midHTML + "</i></span>" : "";
+    const sub = p.length ? '<div class="sub">' + midHTML + "</div>" : "";
+    return '<div class="entry"><div class="l"><b>' + segHTML(inline(title)) + "</b>" + mid +
+      '</div><div class="r">' + segHTML(inline(right)) + "</div>" + sub + "</div>";
+  }
+  function render(doc) {
+    let h = '<h1 class="name">' + esc(doc.name || "Your Name") + "</h1>";
+    doc.header.forEach((l, n) => {
+      const isTitle = n === 0 && !/[@|]|\d{5}/.test(l);
+      h += '<p class="hline' + (isTitle ? " first" : "") + '">' + segHTML(inline(l)) + "</p>";
+    });
+    for (const sec of doc.sections) {
+      h += "<h2>" + esc(sec.title) + "</h2>";
+      let inList = false;
+      for (const it of sec.items) {
+        if (it.type === "bullet" && !inList) { h += "<ul>"; inList = true; }
+        if (it.type !== "bullet" && inList) { h += "</ul>"; inList = false; }
+        if (it.type === "entry") h += entryHTML(it.parts);
+        else if (it.type === "bullet") h += "<li>" + segHTML(inline(it.text)) + "</li>";
+        else h += "<p>" + segHTML(inline(it.text)) + "</p>";
+      }
+      if (inList) h += "</ul>";
+    }
+    return h;
+  }
+
+  // ------------------------------------------------------------ plain text (for portal text boxes)
+  function toText(doc) {
+    const out = [doc.name, ...doc.header.map(plain), ""];
+    for (const sec of doc.sections) {
+      out.push(sec.title.toUpperCase());
+      for (const it of sec.items) {
+        if (it.type === "entry") out.push(it.parts.map(plain).join(" | "));
+        else if (it.type === "bullet") out.push("- " + plain(it.text));
+        else out.push(plain(it.text));
+      }
+      out.push("");
+    }
+    return out.join("\n").trim() + "\n";
+  }
+
+  // ------------------------------------------------------------ fit to one page
+  function measure() {
+    page.querySelectorAll(".ruler").forEach((r) => r.remove());
+    const usable = (297 - 24) * MM;
+    let bottom = 0;
+    for (const el of page.children) {
+      const mb = parseFloat(getComputedStyle(el).marginBottom) || 0;
+      bottom = Math.max(bottom, el.offsetTop + el.offsetHeight + mb);
+    }
+    const used = bottom - 12 * MM;
+    const fill = used / usable;
+    const r = document.createElement("div");
+    r.className = "ruler"; r.style.top = 297 * MM + "px";
+    r.innerHTML = "<span>end of page 1</span>";
+    page.appendChild(r);
+    const fit = $("fit");
+    if (fill <= 1.0) {
+      const pct = Math.round(fill * 100);
+      fit.innerHTML = '<span class="ok">One page, ' + pct + "% of the page used.</span>" +
+        (pct < 80 ? ' <span class="warn">Quite empty: add a relevant bullet or project from the master CV.</span>' : "");
+    } else {
+      const over = Math.ceil((fill - 1) * usable / (parseFloat(getComputedStyle(page).fontSize) * 1.24));
+      fit.innerHTML = '<span class="bad">Over one page by about ' + over + " line" + (over === 1 ? "" : "s") +
+        ".</span> Remove the weakest bullet or project. (Use 10 pt only as a last resort.)";
+    }
+    // scale the preview to the column width
+    const avail = wrap.clientWidth - 28;
+    const s = Math.min(1, avail / page.offsetWidth);
+    scaler.style.transform = "scale(" + s + ")";
+    scaler.style.height = page.offsetHeight * s + "px";
+  }
+
+  // ------------------------------------------------------------ checks
+  const STD = /^(summary|professional summary|profile|career objective|objective|skills|technical skills|key skills|core skills|experience|work experience|professional experience|employment history|internships?|projects|academic projects|personal projects|education|certifications|licenses (and|&) certifications|courses|training|achievements|awards|publications|languages|volunteer experience|volunteering|extracurricular activities|interests)$/i;
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function hasPhrase(text, phrase) {
+    return new RegExp("(^|[^a-z0-9+#])" + escRe(phrase.toLowerCase()) + "($|[^a-z0-9+#])").test(text.toLowerCase());
+  }
+  function checks(doc) {
+    const bad = [], warn = [], good = [];
+    const head = doc.header.join(" ");
+    const bodyItems = doc.sections.flatMap((s) => s.items);
+    const body = bodyItems.map((it) => it.type === "entry" ? it.parts.join(" | ") : plain(it.text)).join("\n");
+    const bullets = bodyItems.filter((it) => it.type === "bullet").map((it) => plain(it.text));
+
+    if (!doc.name) bad.push("No name. The first line must be <code># Full Name</code>.");
+    if (!/[\w.+-]+@[\w-]+\.[\w.]+/.test(head)) bad.push("No email in the contact lines under the name.");
+    if (!/\+?\d[\d\s-]{8,}/.test(head)) warn.push("No phone number in the contact lines.");
+    if (!/linkedin\.com/i.test(head)) warn.push("No LinkedIn link. Recruiters check it.");
+    const titles = doc.sections.map((s) => s.title);
+    ["Experience|Work Experience|Professional Experience|Internships?|Projects", "Education", "Skills|Technical Skills|Key Skills"].forEach((need) => {
+      if (!titles.some((t) => new RegExp("^(" + need + ")$", "i").test(t))) bad.push("Missing a standard section: " + need.split("|")[0] + ".");
+    });
+    titles.filter((t) => !STD.test(t)).forEach((t) => warn.push("Section name “" + esc(t) + "” is not a standard one. ATS parsers look for names like Summary, Skills, Experience, Projects, Education, Certifications."));
+    if (/(^|\s)(I|I'm|I've|me|my)(\s|$|[,.])/.test(body)) warn.push("Uses “I / me / my”. Resumes drop the first person.");
+    const buzz = body.match(/\b(passionate|hard[- ]?working|go-getter|synergy|results[- ]driven|team player|detail[- ]oriented|self[- ]motivated|dynamic)\b/gi);
+    if (buzz) warn.push("Empty buzzwords: " + [...new Set(buzz.map((b) => b.toLowerCase()))].join(", ") + ". Replace with a fact.");
+    const long = bullets.filter((b) => b.length > 230);
+    if (long.length) warn.push(long.length + " bullet(s) longer than about 2 lines. Shorten them.");
+    const verbs = {};
+    bullets.forEach((b) => { const v = (b.match(/^[A-Za-z]+/) || [""])[0].toLowerCase(); if (v) verbs[v] = (verbs[v] || 0) + 1; });
+    Object.entries(verbs).filter(([, n]) => n > 2).forEach(([v, n]) => warn.push("“" + v + "” starts " + n + " bullets. Vary the verbs."));
+    if (/[\u{1F300}-\u{1FAFF}←-⇿☀-➿ﬀ-ﬆ★☆]/u.test(doc.name + head + body))
+      bad.push("Emoji, arrows, stars or ligature characters found. Some ATS parsers turn them into garbage.");
+    const monthFmt = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]* \d{4}\b/.test(body);
+    const numFmt = /\b\d{1,2}\/\d{4}\b/.test(body);
+    if (monthFmt && numFmt) warn.push("Two date styles mixed (e.g. “Sep 2025” and “09/2025”). Use one.");
+    if (/\b(expert|guru|ninja|rockstar)\b/i.test(body)) warn.push("Words like “expert” invite hard interview questions. Use only if true.");
+
+    // keyword coverage
+    let kwHTML = "";
+    if (doc.keywords.length) {
+      const all = doc.name + "\n" + head + "\n" + body;
+      const hits = doc.keywords.filter((k) => hasPhrase(all, k));
+      const miss = doc.keywords.filter((k) => !hasPhrase(all, k));
+      kwHTML = "<p><b>Job keywords:</b> " + hits.length + " of " + doc.keywords.length + " in the resume.</p>" +
+        doc.keywords.map((k) => '<span class="kw ' + (hits.includes(k) ? "hit" : "miss") + '">' + (hits.includes(k) ? "✓ " : "✗ ") + esc(k) + "</span>").join("") +
+        (miss.length ? '<p class="hint">Missing ones stay missing unless they are true and in the master CV.</p>' : "");
+    }
+
+    // number fact check
+    const master = $("master").value;
+    if (master.trim()) {
+      const m = master.replace(/[–—]/g, "-");
+      const nums = new Set();
+      ((doc.sections.map((s) => s.items.map((it) => it.type === "entry" ? "" : plain(it.text)).join(" ")).join(" ")).replace(/[–—]/g, "-")
+        .match(/\d[\d,.]*\+?%?/g) || []).forEach((n) => {
+          n = n.replace(/[.,]+$/, "");
+          if (/^(19|20)\d\d$/.test(n)) return;
+          nums.add(n);
+        });
+      const unknown = [...nums].filter((n) => !m.includes(n) && !m.includes(n.replace(/\+$/, "")));
+      if (unknown.length) bad.push("Numbers not found in the master CV: <b>" + unknown.map(esc).join(", ") + "</b>. Delete them unless you can prove them.");
+      else good.push("Every number in the resume is in the master CV.");
+    }
+
+    if (!bad.length && !warn.length) good.push("Format checks passed.");
+    const li = (arr, cls) => arr.map((t) => '<li class="' + cls + '">' + t + "</li>").join("");
+    $("checkOut").innerHTML = kwHTML + "<ul>" + li(bad, "bad") + li(warn, "warn") + li(good, "ok") + "</ul>";
+  }
+
+  // ------------------------------------------------------------ Word (.docx), built in the browser
+  const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zip(files) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);
+      h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true);
+      h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true);
+      c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, offset, true);
+      central.push(new Uint8Array(c.buffer), name);
+      offset += 30 + name.length + data.length;
+    }
+    const size = central.reduce((s, a) => s + a.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+    e.setUint32(12, size, true); e.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(e.buffer)],
+      { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  }
+  function docx(doc, ptSize) {
+    const x = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const sz = Math.round(ptSize * 2), rels = [];
+    const NAVY = "1F3A5F", RIGHT = 11906 - 2 * 794;
+    const rPr = (o) => '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>' +
+      (o.b ? "<w:b/>" : "") + (o.i ? "<w:i/>" : "") + (o.caps ? "<w:caps/>" : "") +
+      (o.color ? '<w:color w:val="' + o.color + '"/>' : "") + '<w:sz w:val="' + (o.sz || sz) + '"/><w:szCs w:val="' + (o.sz || sz) + '"/></w:rPr>';
+    const run = (t, o) => "<w:r>" + rPr(o) + '<w:t xml:space="preserve">' + x(t) + "</w:t></w:r>";
+    const runs = (segs, base) => segs.map((s) => {
+      const o = Object.assign({}, base, { b: base.b || s.b, i: base.i || s.i });
+      if (!s.href) return run(s.t, o);
+      rels.push(s.href);
+      return '<w:hyperlink r:id="rIdL' + rels.length + '">' + run(s.t, o) + "</w:hyperlink>";
+    }).join("");
+    const para = (inner, pPr) => "<w:p><w:pPr>" + (pPr || "") + "</w:pPr>" + inner + "</w:p>";
+    const sp = (b, a) => '<w:spacing w:before="' + b + '" w:after="' + a + '" w:line="252" w:lineRule="auto"/>';
+    let body = para(run(doc.name || "Your Name", { b: true, sz: sz * 2, color: NAVY }), sp(0, 40) + '<w:jc w:val="center"/>');
+    doc.header.forEach((l, n) => {
+      const isTitle = n === 0 && !/[@|]|\d{5}/.test(l);
+      body += para(runs(inline(l), { b: isTitle }), sp(0, 20) + '<w:jc w:val="center"/>');
+    });
+    for (const sec of doc.sections) {
+      body += para(run(sec.title, { b: true, caps: true, color: NAVY, sz: Math.round(sz * 1.08) }),
+        '<w:keepNext/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="' + NAVY + '"/></w:pBdr>' + sp(180, 60));
+      for (const it of sec.items) {
+        if (it.type === "entry") {
+          const p = it.parts.slice(); const right = p.length > 1 ? p.pop() : ""; const title = p.shift() || "";
+          const tabs = '<w:keepNext/><w:tabs><w:tab w:val="right" w:pos="' + RIGHT + '"/></w:tabs>';
+          const tail = right ? "<w:r>" + rPr({}) + "<w:tab/></w:r>" + runs(inline(right), {}) : "";
+          const midText = p.join(" | ");
+          const two = p.length && (plain(title) + plain(midText) + plain(right)).length > 92 * (10.5 / ptSize);
+          if (two) {
+            body += para(runs(inline(title), { b: true }) + tail, tabs + sp(80, 0));
+            body += para(runs(inline(midText), { i: true }), '<w:keepNext/>' + sp(0, 10));
+          } else {
+            let inner = runs(inline(title), { b: true });
+            if (p.length) inner += run(" | ", {}) + runs(inline(midText), { i: true });
+            body += para(inner + tail, tabs + sp(80, 10));
+          }
+        } else if (it.type === "bullet") {
+          body += para(run("•", {}) + "<w:r>" + rPr({}) + "<w:tab/></w:r>" + runs(inline(it.text), {}),
+            '<w:tabs><w:tab w:val="left" w:pos="284"/></w:tabs>' + sp(0, 16) + '<w:ind w:left="284" w:hanging="284"/>');
+        } else {
+          body += para(runs(inline(it.text), {}), sp(10, 20));
+        }
+      }
+    }
+    const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    const document = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' + W + "><w:body>" + body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="680" w:right="794" w:bottom="680" w:left="794" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      rels.map((h, n) => '<Relationship Id="rIdL' + (n + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + x(h) + '" TargetMode="External"/>').join("") +
+      "</Relationships>";
+    const title = x(doc.name ? doc.name + " - Resume" : "Resume");
+    return zip([
+      { name: "[Content_Types].xml", text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>' },
+      { name: "_rels/.rels", text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>' },
+      { name: "docProps/core.xml", text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>' + title + "</dc:title><dc:creator>" + x(doc.name || "") + "</dc:creator></cp:coreProperties>" },
+      { name: "word/document.xml", text: document },
+      { name: "word/_rels/document.xml.rels", text: docRels }
+    ]);
+  }
+
+  // ------------------------------------------------------------ wiring
+  let current = parse("");
+  function fileName() {
+    const v = $("fname").value.trim() || ((current.name || "Resume").replace(/\s+/g, "_") + "_Resume");
+    return v.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "_");
+  }
+  function update() {
+    current = parse(src.value);
+    page.style.setProperty("--fs", $("fs").value + "pt");
+    page.innerHTML = render(current);
+    const lineH = parseFloat(getComputedStyle(page).fontSize) * 1.6;
+    page.querySelectorAll(".entry").forEach((e) => {
+      const l = e.querySelector(".l");
+      if (e.querySelector(".mid") && l.offsetHeight > lineH) e.classList.add("two");
+    });
+    measure();
+    checks(current);
+    try { localStorage.setItem(STORE, JSON.stringify({ src: src.value, fname: $("fname").value, fs: $("fs").value })); } catch (e) { /* storage off */ }
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE) || "null");
+    if (saved) { src.value = saved.src || ""; $("fname").value = saved.fname || ""; $("fs").value = saved.fs || "10.5"; }
+  } catch (e) { /* storage off */ }
+
+  let timer;
+  [src, $("master"), $("fname")].forEach((el) => el.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(update, 120); }));
+  $("fs").addEventListener("change", update);
+  window.addEventListener("resize", measure);
+  $("example").addEventListener("click", () => {
+    if (src.value.trim() && !confirm("Replace what is in the box with the example?")) return;
+    src.value = EXAMPLE; update();
+  });
+  $("pdf").addEventListener("click", () => {
+    const old = document.title;
+    document.title = fileName();
+    window.print();
+    setTimeout(() => { document.title = old; }, 1000);
+  });
+  $("docx").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(docx(current, parseFloat($("fs").value)));
+    a.download = fileName() + ".docx";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  });
+  $("copytxt").addEventListener("click", async () => {
+    const t = toText(current);
+    try { await navigator.clipboard.writeText(t); $("copytxt").textContent = "Copied"; }
+    catch (e) { const w = window.open("", "_blank"); if (w) { w.document.body.innerText = t; } }
+    setTimeout(() => { $("copytxt").textContent = "Copy plain text"; }, 1500);
+  });
+  window.ResumeMaker = { parse, toText, docx, render };  // for testing
+  update();
+})();
+</script>
+</body>
+</html>
